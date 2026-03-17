@@ -259,13 +259,14 @@ body{background:#0a0a0f;overflow:hidden;font-family:'Nunito',sans-serif;user-sel
 
 <!-- МЕНЮ -->
 <div id="menuScreen" class="screen active">
-  <div class="logo-tank">TankX</div>
-  <div class="nick-wrap">
+  <canvas id="menuStarsCanvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
+  <div class="logo-tank" style="position:relative;z-index:1;">TankX</div>
+  <div class="nick-wrap" style="position:relative;z-index:1;">
     <div class="nick-input-box">
       <input id="nickInput" maxlength="16" placeholder="Введи ник..." spellcheck="false" autocomplete="off">
     </div>
   </div>
-  <button class="btn-play-tank" id="playBtn">ИГРАТЬ</button>
+  <button class="btn-play-tank" id="playBtn" style="position:relative;z-index:1;">ИГРАТЬ</button>
 </div>
 
 <!-- КРУЖОК СКИНА (как в Gulper) -->
@@ -504,47 +505,117 @@ function updateReload(tank){
 }
 
 // ══ ЧАСТИЦЫ ══
+// Следы гусениц
+let trackMarks = [];
+
+function spawnTrack(tank){
+  if(!tank.alive) return;
+  // Две точки — левая и правая гусеница
+  const a = tank.angle;
+  const nx = Math.cos(a+Math.PI/2)*14;
+  const ny = Math.sin(a+Math.PI/2)*14;
+  trackMarks.push({x:tank.x+nx, y:tank.y+ny, angle:a, alpha:0.55, w:6, h:3});
+  trackMarks.push({x:tank.x-nx, y:tank.y-ny, angle:a, alpha:0.55, w:6, h:3});
+  // Пыль
+  for(let i=0;i<2;i++){
+    const da = a+Math.PI+(Math.random()-.5)*0.8;
+    particles.push({
+      x:tank.x+(Math.random()-.5)*10, y:tank.y+(Math.random()-.5)*10,
+      vx:Math.cos(da)*0.5, vy:Math.sin(da)*0.5-0.3,
+      r:4+Math.random()*4, alpha:0.35, decay:0.018,
+      type:'dust'
+    });
+  }
+}
+
+function updateTrackMarks(){
+  for(let i=trackMarks.length-1;i>=0;i--){
+    trackMarks[i].alpha -= 0.003;
+    if(trackMarks[i].alpha<=0) trackMarks.splice(i,1);
+  }
+}
+
+function drawTrackMarks(){
+  for(const t of trackMarks){
+    const px=t.x-camX, py=t.y-camY;
+    if(px<-20||px>W+20||py<-20||py>H+20) continue;
+    ctx.save();
+    ctx.globalAlpha=t.alpha;
+    ctx.translate(px,py);
+    ctx.rotate(t.angle);
+    ctx.fillStyle='rgba(0,0,0,0.6)';
+    ctx.fillRect(-t.w/2,-t.h/2,t.w,t.h);
+    ctx.restore();
+  }
+  ctx.globalAlpha=1;
+}
+
 function spawnExplosion(x,y,color,count=18){
+  // Огненное кольцо
+  particles.push({
+    x,y, vx:0,vy:0,
+    r:4, maxR:55+Math.random()*20,
+    color, alpha:0.8, decay:0.035,
+    type:'ring'
+  });
+  // Второе кольцо чуть позже и меньше
+  particles.push({
+    x,y, vx:0,vy:0,
+    r:2, maxR:30+Math.random()*15,
+    color:'#ff8800', alpha:0.6, decay:0.045,
+    type:'ring'
+  });
+  // Искры
   for(let i=0;i<count;i++){
     const angle=Math.random()*Math.PI*2;
-    const speed=1+Math.random()*5;
+    const speed=2+Math.random()*6;
     particles.push({
       x,y,
       vx:Math.cos(angle)*speed,
       vy:Math.sin(angle)*speed,
-      r:3+Math.random()*5,
-      color,
+      r:2+Math.random()*4,
+      color: Math.random()<0.5 ? color : '#ff8800',
       alpha:1,
-      decay:0.02+Math.random()*0.03,
+      decay:0.025+Math.random()*0.02,
       type:'spark'
     });
   }
-  // Дым
-  for(let i=0;i<8;i++){
+  // Дым который поднимается
+  for(let i=0;i<10;i++){
     const angle=Math.random()*Math.PI*2;
     particles.push({
-      x:x+(Math.random()-.5)*20,y:y+(Math.random()-.5)*20,
-      vx:Math.cos(angle)*0.6,vy:Math.sin(angle)*0.6-0.5,
-      r:8+Math.random()*14,
-      color:'rgba(60,60,60,',
-      alpha:0.7,decay:0.012,type:'smoke'
+      x:x+(Math.random()-.5)*18, y:y+(Math.random()-.5)*18,
+      vx:Math.cos(angle)*0.4+(Math.random()-.5)*0.5,
+      vy:Math.sin(angle)*0.4-0.8-Math.random()*0.6,
+      r:10+Math.random()*18,
+      alpha:0.65, decay:0.008+Math.random()*0.006,
+      type:'smoke'
     });
   }
 }
 
 function spawnMuzzleFlash(x,y,angle,ci){
-  const c=TANK_COLORS[ci%TANK_COLORS.length];
-  for(let i=0;i<6;i++){
-    const a=angle+(Math.random()-.5)*0.6;
-    particles.push({x,y,vx:Math.cos(a)*(3+Math.random()*4),vy:Math.sin(a)*(3+Math.random()*4),r:2+Math.random()*3,color:c.body,alpha:1,decay:0.08,type:'spark'});
+  const c = TANK_COLORS[ci%TANK_COLORS.length];
+  // Звезда вспышки
+  for(let i=0;i<8;i++){
+    const a=angle+(Math.random()-.5)*0.7;
+    const spd=4+Math.random()*5;
+    particles.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:2+Math.random()*3,color:'#fff8c0',alpha:1,decay:0.1,type:'spark'});
   }
+  // Кольцо вспышки
+  particles.push({x,y,vx:0,vy:0,r:3,maxR:22,color:'#ffe066',alpha:0.7,decay:0.12,type:'ring'});
 }
 
 function spawnHitSpark(x,y){
-  for(let i=0;i<6;i++){
+  // Яркий сноп при рикошете
+  for(let i=0;i<12;i++){
     const a=Math.random()*Math.PI*2;
-    particles.push({x,y,vx:Math.cos(a)*2,vy:Math.sin(a)*2,r:2,color:'#ffdd00',alpha:1,decay:0.07,type:'spark'});
+    const spd=2+Math.random()*5;
+    particles.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,r:1.5+Math.random()*2.5,
+      color:Math.random()<0.6?'#fff8a0':'#ff9900',alpha:1,decay:0.06+Math.random()*0.04,type:'spark'});
   }
+  // Маленькое кольцо
+  particles.push({x,y,vx:0,vy:0,r:2,maxR:18,color:'#ffcc00',alpha:0.5,decay:0.1,type:'ring'});
 }
 
 // ══ БОТ ИИ ══
@@ -605,16 +676,22 @@ function updateBot(bot, dt){
     bot.turretAngle=bot.botAngle;
   }
 
-  // Двигаемся
+  // Двигаемся плавно
   const spd = bot.hp < 40 ? TANK_SPEED_BOOST : TANK_SPEED;
-  let nx=bot.x+Math.cos(bot.botAngle)*spd;
-  let ny=bot.y+Math.sin(bot.botAngle)*spd;
+
+  // Плавный поворот корпуса
+  let da = bot.botAngle - bot.angle;
+  while(da >  Math.PI) da -= Math.PI*2;
+  while(da < -Math.PI) da += Math.PI*2;
+  bot.angle += da * 0.12;
+
+  let nx=bot.x+Math.cos(bot.angle)*spd;
+  let ny=bot.y+Math.sin(bot.angle)*spd;
   if(hasWallRect(nx,ny,18)||nx<50||nx>WORLD-50||ny<50||ny>WORLD-50){
     bot.botAngle+=Math.PI/2+Math.random()*Math.PI;
     bot.botMoveTimer=0;
   } else {
     bot.x=nx; bot.y=ny;
-    bot.angle=bot.botAngle;
   }
 
   updateReload(bot);
@@ -635,11 +712,17 @@ function updatePlayer(dt){
   if(keys['ArrowRight']||keys['KeyD']||keys['В']||keys['в']) dx=1;
 
   if(dx||dy){
-    const angle=Math.atan2(dy,dx);
-    player.angle=angle;
+    const targetAngle = Math.atan2(dy,dx);
+
+    // Плавный поворот корпуса — находим кратчайший путь
+    let da = targetAngle - player.angle;
+    while(da >  Math.PI) da -= Math.PI*2;
+    while(da < -Math.PI) da += Math.PI*2;
+    player.angle += da * 0.18; // скорость поворота
+
     const spd=TANK_SPEED+(keys['ShiftLeft']?1:0);
-    const nx=player.x+Math.cos(angle)*spd;
-    const ny=player.y+Math.sin(angle)*spd;
+    const nx=player.x+Math.cos(player.angle)*spd;
+    const ny=player.y+Math.sin(player.angle)*spd;
     if(!hasWallRect(nx,player.y,18)&&nx>50&&nx<WORLD-50) player.x=nx;
     if(!hasWallRect(player.x,ny,18)&&ny>50&&ny<WORLD-50) player.y=ny;
   }
@@ -835,37 +918,84 @@ function drawTank(t){
 function drawBullet(b){
   if(!b.alive) return;
   const px=b.x-camX, py=b.y-camY;
-  // Трейл
+  const angle=Math.atan2(b.vy,b.vx);
+  const spd=Math.hypot(b.vx,b.vy);
+
+  // Огненный трейл
   for(let i=0;i<b.trail.length;i++){
     const tp=b.trail[i];
-    const alpha=(i/b.trail.length)*0.5;
+    const t=i/b.trail.length;
+    const tr=5*t;
+    // Оранжево-красный огонь
     ctx.beginPath();
-    ctx.arc(tp.x-camX,tp.y-camY,3*(i/b.trail.length),0,Math.PI*2);
-    ctx.fillStyle=`rgba(255,220,50,${alpha})`;
+    ctx.arc(tp.x-camX,tp.y-camY,tr,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${255},${Math.floor(100+80*t)},0,${t*0.6})`;
     ctx.fill();
+    // Жёлтое ядро
+    if(t>0.5){
+      ctx.beginPath();
+      ctx.arc(tp.x-camX,tp.y-camY,tr*0.4,0,Math.PI*2);
+      ctx.fillStyle=`rgba(255,240,100,${t*0.5})`;
+      ctx.fill();
+    }
   }
-  // Снаряд
-  ctx.beginPath();
-  ctx.arc(px,py,5,0,Math.PI*2);
-  ctx.fillStyle='#ffdd00';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(px-1,py-1,2,0,Math.PI*2);
-  ctx.fillStyle='#fff';
-  ctx.fill();
+
+  // Вытянутый снаряд
+  ctx.save();
+  ctx.translate(px,py);
+  ctx.rotate(angle);
+
+  // Свечение вокруг снаряда
+  const glow=ctx.createRadialGradient(0,0,0,0,0,10);
+  glow.addColorStop(0,'rgba(255,220,50,0.4)');
+  glow.addColorStop(1,'rgba(255,100,0,0)');
+  ctx.fillStyle=glow;
+  ctx.beginPath(); ctx.ellipse(0,0,10,6,0,0,Math.PI*2); ctx.fill();
+
+  // Корпус снаряда — вытянутый
+  const bGrad=ctx.createLinearGradient(0,-3,0,3);
+  bGrad.addColorStop(0,'#fff8a0');
+  bGrad.addColorStop(0.4,'#ffdd00');
+  bGrad.addColorStop(1,'#ff8800');
+  ctx.fillStyle=bGrad;
+  ctx.beginPath(); ctx.ellipse(0,0,7,3,0,0,Math.PI*2); ctx.fill();
+
+  // Блик
+  ctx.fillStyle='rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.ellipse(-1,-0.5,3,1,0,0,Math.PI*2); ctx.fill();
+
+  ctx.restore();
 }
 
 function drawParticle(p){
+  const px=p.x-camX, py=p.y-camY;
+  if(px<-100||px>W+100||py<-100||py>H+100) return;
   ctx.globalAlpha=p.alpha;
-  if(p.type==='smoke'){
-    ctx.fillStyle=`rgba(60,60,60,${p.alpha*0.5})`;
+
+  if(p.type==='ring'){
+    // Расширяющееся кольцо
+    const progress = p.r/p.maxR;
     ctx.beginPath();
-    ctx.arc(p.x-camX,p.y-camY,p.r,0,Math.PI*2);
-    ctx.fill();
+    ctx.arc(px,py,p.r,0,Math.PI*2);
+    ctx.strokeStyle=p.color;
+    ctx.lineWidth=3*(1-progress)+1;
+    ctx.stroke();
+  } else if(p.type==='smoke'){
+    // Дым — серый круг
+    const sg=ctx.createRadialGradient(px,py,0,px,py,p.r);
+    sg.addColorStop(0,`rgba(80,80,80,${p.alpha*0.5})`);
+    sg.addColorStop(1,`rgba(40,40,40,0)`);
+    ctx.fillStyle=sg;
+    ctx.beginPath(); ctx.arc(px,py,p.r,0,Math.PI*2); ctx.fill();
+  } else if(p.type==='dust'){
+    // Пыль из-под гусениц
+    ctx.fillStyle=`rgba(120,100,60,${p.alpha*0.4})`;
+    ctx.beginPath(); ctx.arc(px,py,p.r,0,Math.PI*2); ctx.fill();
   } else {
+    // Искра
     ctx.fillStyle=p.color;
     ctx.beginPath();
-    ctx.arc(p.x-camX,p.y-camY,p.r*p.alpha,0,Math.PI*2);
+    ctx.arc(px,py,p.r*p.alpha,0,Math.PI*2);
     ctx.fill();
   }
   ctx.globalAlpha=1;
@@ -879,12 +1009,12 @@ function drawBackground(){
   for(let x=startX;x<camX+W+tileSize;x+=tileSize){
     for(let y=startY;y<camY+H+tileSize;y+=tileSize){
       const px=x-camX,py=y-camY;
-      ctx.fillStyle=(Math.floor(x/tileSize)+Math.floor(y/tileSize))%2===0?'#0d0d18':'#0f0f1c';
+      ctx.fillStyle=(Math.floor(x/tileSize)+Math.floor(y/tileSize))%2===0?'#0d1f0d':'#0f240f';
       ctx.fillRect(px,py,tileSize,tileSize);
     }
   }
   // Тонкая сетка
-  ctx.strokeStyle='rgba(255,255,255,0.025)';
+  ctx.strokeStyle='rgba(255,255,255,0.018)';
   ctx.lineWidth=0.5;
   for(let x=startX;x<camX+W+tileSize;x+=tileSize){
     ctx.beginPath();ctx.moveTo(x-camX,0);ctx.lineTo(x-camX,H);ctx.stroke();
@@ -976,6 +1106,7 @@ function showToast(msg,color){
 
 // ══ ГЛАВНЫЙ ЦИКЛ ══
 let lastT=0;
+let trackTimer=0;
 function loop(ts){
   const dt=Math.min(ts-lastT,50);lastT=ts;
   if(!running){requestAnimationFrame(loop);return;}
@@ -985,20 +1116,43 @@ function loop(ts){
   for(const bot of tanks) if(!bot.isPlayer) updateBot(bot,dt);
   updateBullets();
 
+  // Следы гусениц — спавним при движении
+  trackTimer+=dt;
+  if(trackTimer>80){
+    trackTimer=0;
+    for(const t of tanks){
+      if(!t.alive) continue;
+      const moving = Math.hypot(t.vx||0,t.vy||0)>0.1 ||
+        (t.isPlayer && (keys['ArrowUp']||keys['KeyW']||keys['ц']||keys['ArrowDown']||
+          keys['KeyS']||keys['ы']||keys['ArrowLeft']||keys['KeyA']||
+          keys['ф']||keys['ArrowRight']||keys['KeyD']||keys['в']));
+      // Для ботов — если они двигались (угол менялся)
+      if(t.isPlayer ? moving : t.alive) spawnTrack(t);
+    }
+  }
+
   // Частицы
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i];
-    p.x+=p.vx; p.y+=p.vy;
-    p.vx*=0.94; p.vy*=0.94;
-    p.vy+=p.type==='smoke'?-0.05:0.05;
-    p.r*=0.98;
-    p.alpha-=p.decay;
+    if(p.type==='ring'){
+      // Кольцо расширяется
+      p.r += (p.maxR - p.r) * 0.15;
+      p.alpha -= p.decay;
+    } else {
+      p.x+=p.vx; p.y+=p.vy;
+      p.vx*=0.93; p.vy*=0.93;
+      if(p.type==='smoke'||p.type==='dust') p.r*=1.02;
+      else p.r*=0.97;
+      p.alpha-=p.decay;
+    }
     if(p.alpha<=0) particles.splice(i,1);
   }
+  updateTrackMarks();
 
   // Рисование
   ctx.clearRect(0,0,W,H);
   drawBackground();
+  drawTrackMarks();
   MAP_LAYOUT.forEach(w=>drawTile(w.x,w.y));
   bullets.forEach(drawBullet);
   particles.forEach(drawParticle);
@@ -1303,6 +1457,63 @@ function loopWithRadar(){
   requestAnimationFrame(loopWithRadar);
 }
 requestAnimationFrame(loopWithRadar);
+
+// ══ ЗВЁЗДЫ В МЕНЮ ══
+(function(){
+  const cv = document.getElementById('menuStarsCanvas');
+  const cx = cv.getContext('2d');
+  const stars = [];
+  function resize(){ cv.width=cv.offsetWidth; cv.height=cv.offsetHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const STAR_COLORS = [
+    [255,255,255],
+    [249,202,36],
+    [162,155,254],
+  ];
+
+  for(let i=0;i<120;i++){
+    const col = STAR_COLORS[Math.floor(Math.random()*STAR_COLORS.length)];
+    stars.push({
+      x: Math.random(),
+      y: Math.random(),
+      r: 0.4+Math.random()*1.8,
+      speed: 0.00008+Math.random()*0.00015,
+      alpha: 0.2+Math.random()*0.7,
+      twinkleSpeed: 0.01+Math.random()*0.03,
+      twinklePhase: Math.random()*Math.PI*2,
+      rgb: col,
+    });
+  }
+
+  function drawStars(){
+    if(!cv.width) resize();
+    cx.clearRect(0,0,cv.width,cv.height);
+    const W=cv.width, H=cv.height;
+    for(const s of stars){
+      s.twinklePhase += s.twinkleSpeed;
+      s.y += s.speed;
+      if(s.y>1) s.y=0;
+      const twinkle = 0.4+0.6*Math.abs(Math.sin(s.twinklePhase));
+      const px=s.x*W, py=s.y*H;
+      const [r,g,b] = s.rgb;
+      // Свечение
+      const grd=cx.createRadialGradient(px,py,0,px,py,s.r*3);
+      grd.addColorStop(0,`rgba(${r},${g},${b},${s.alpha*twinkle*0.3})`);
+      grd.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      cx.fillStyle=grd;
+      cx.beginPath(); cx.arc(px,py,s.r*3,0,Math.PI*2); cx.fill();
+      // Ядро
+      cx.globalAlpha=s.alpha*twinkle;
+      cx.fillStyle=`rgb(${r},${g},${b})`;
+      cx.beginPath(); cx.arc(px,py,s.r,0,Math.PI*2); cx.fill();
+      cx.globalAlpha=1;
+    }
+    requestAnimationFrame(drawStars);
+  }
+  drawStars();
+})();
 
 const nickInput = document.getElementById('nickInput');
 nickInput.value = localStorage.getItem('tankx_nick') || '';
