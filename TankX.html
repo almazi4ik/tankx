@@ -249,7 +249,55 @@ body{background:#0a0a0f;overflow:hidden;font-family:'Nunito',sans-serif;user-sel
 .btn-menu-tank{background:transparent;border:2px solid rgba(255,255,255,0.2);border-radius:60px;color:#fff;font-family:'Fredoka One',cursive;font-size:18px;padding:11px 36px;cursor:pointer;margin-top:12px;}
 .btn-menu-tank:hover{background:rgba(255,255,255,0.08);}
 
-#toastWrap{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}
+/* ДЖОЙСТИКИ */
+#joystickLeft, #joystickRight {
+  position:fixed;
+  bottom:30px;
+  width:130px; height:130px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.06);
+  border:2px solid rgba(255,255,255,0.18);
+  display:none;
+  z-index:100;
+  touch-action:none;
+  backdrop-filter:blur(4px);
+}
+#joystickLeft  { left:24px; }
+#joystickRight { right:24px; border-color:rgba(255,80,80,0.35); background:rgba(255,60,60,0.07); }
+
+.joy-knob {
+  position:absolute;
+  width:54px; height:54px;
+  border-radius:50%;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+#joystickLeft  .joy-knob { background:radial-gradient(circle at 35% 35%,rgba(255,255,255,0.9),rgba(180,180,180,0.6)); box-shadow:0 4px 16px rgba(0,0,0,0.5); }
+#joystickRight .joy-knob { background:radial-gradient(circle at 35% 35%,rgba(255,120,120,0.95),rgba(180,50,50,0.7)); box-shadow:0 4px 16px rgba(255,0,0,0.3); }
+
+.joy-label {
+  position:absolute;
+  bottom:-22px; left:50%;
+  transform:translateX(-50%);
+  font-family:'Fredoka One',cursive;
+  font-size:11px; letter-spacing:2px;
+  color:rgba(255,255,255,0.25);
+  white-space:nowrap;
+}
+#fireRing {
+  position:fixed; bottom:30px; right:24px;
+  width:130px; height:130px;
+  border-radius:50%;
+  display:none; z-index:99;
+  pointer-events:none;
+  border:2px solid rgba(255,80,80,0);
+  transition:border-color .1s, box-shadow .1s;
+}
+#fireRing.shooting {
+  border-color:rgba(255,80,80,0.7);
+  box-shadow:0 0 20px rgba(255,80,80,0.4);
+}
 .toast{background:rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:50px;padding:7px 20px;font-family:'Fredoka One',cursive;font-size:15px;color:#fff;animation:toastIn .3s ease,toastOut .4s ease 1.8s forwards;white-space:nowrap;}
 @keyframes toastIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes toastOut{to{opacity:0;transform:translateY(-8px)}}
@@ -322,6 +370,17 @@ body{background:#0a0a0f;overflow:hidden;font-family:'Nunito',sans-serif;user-sel
 </div>
 
 <div id="toastWrap"></div>
+
+<!-- ДЖОЙСТИКИ (мобильные) -->
+<div id="joystickLeft">
+  <div class="joy-knob"></div>
+  <div class="joy-label">ДВИЖЕНИЕ</div>
+</div>
+<div id="joystickRight">
+  <div class="joy-knob"></div>
+  <div class="joy-label">ОГОНЬ</div>
+</div>
+<div id="fireRing"></div>
 <canvas id="gameCanvas"></canvas>
 
 <script>
@@ -1458,7 +1517,7 @@ function loopWithRadar(){
 }
 requestAnimationFrame(loopWithRadar);
 
-// ══ ЖИВАЯ БИТВА В МЕНЮ ══
+// ══ ФОН МЕНЮ ══
 (function(){
   const cv = document.getElementById('menuStarsCanvas');
   const cx = cv.getContext('2d');
@@ -1467,274 +1526,298 @@ requestAnimationFrame(loopWithRadar);
   resize();
   window.addEventListener('resize', resize);
 
-  const DEMO_COLORS = [
-    {body:'#f9ca24',dark:'#c48f00',barrel:'#a07000'},
-    {body:'#ff6b9d',dark:'#c0395f',barrel:'#901040'},
-    {body:'#00e5cc',dark:'#009988',barrel:'#007060'},
-    {body:'#a29bfe',dark:'#6c5ce7',barrel:'#4a3cb0'},
-    {body:'#ff9f43',dark:'#c06a10',barrel:'#904800'},
-    {body:'#39ff14',dark:'#1a9900',barrel:'#107000'},
-    {body:'#ff4e4e',dark:'#b02020',barrel:'#801010'},
-    {body:'#4db8ff',dark:'#1a7ac0',barrel:'#0a5090'},
-  ];
+  // Частицы пыли/светлячков
+  const particles = [];
+  for(let i=0;i<60;i++){
+    particles.push({
+      x: Math.random(),
+      y: Math.random(),
+      size: 1+Math.random()*3,
+      speedX: (Math.random()-.5)*0.0002,
+      speedY: -0.00005-Math.random()*0.0001,
+      alpha: 0.1+Math.random()*0.5,
+      pulse: Math.random()*Math.PI*2,
+      pulseSpeed: 0.01+Math.random()*0.02,
+      color: Math.random()<0.6
+        ? [57,255,20]      // зелёный
+        : Math.random()<0.5
+          ? [249,202,36]   // золотой
+          : [255,255,255], // белый
+    });
+  }
 
-  // Мини-частицы для демо
-  const dParts = [];
-
-  function spawnDemoExplosion(x,y,color){
-    for(let i=0;i<14;i++){
-      const a=Math.random()*Math.PI*2, spd=1+Math.random()*4;
-      dParts.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,
-        r:2+Math.random()*3,color,alpha:1,decay:0.025,type:'spark'});
-    }
-    dParts.push({x,y,vx:0,vy:0,r:3,maxR:35,color,alpha:0.7,decay:0.04,type:'ring'});
-    for(let i=0;i<5;i++){
-      const a=Math.random()*Math.PI*2;
-      dParts.push({x,y,vx:Math.cos(a)*0.4,vy:Math.sin(a)*0.4-0.5,
-        r:8+Math.random()*10,alpha:0.4,decay:0.01,type:'smoke'});
+  // Шестиугольная сетка
+  function drawHexGrid(W,H,t){
+    const size = 44;
+    const h = size*Math.sqrt(3);
+    cx.strokeStyle='rgba(57,255,20,0.04)';
+    cx.lineWidth=0.8;
+    for(let row=-1;row<H/h+2;row++){
+      for(let col=-1;col<W/(size*1.5)+2;col++){
+        const x = col*size*1.5;
+        const y = row*h + (col%2===0?0:h/2);
+        // Лёгкое движение
+        const ox = Math.sin(t*0.0003+row*0.3)*3;
+        const oy = Math.cos(t*0.0002+col*0.4)*3;
+        cx.beginPath();
+        for(let i=0;i<6;i++){
+          const a = i*Math.PI/3 - Math.PI/6;
+          const px2 = x+ox+Math.cos(a)*(size-2);
+          const py2 = y+oy+Math.sin(a)*(size-2);
+          i===0?cx.moveTo(px2,py2):cx.lineTo(px2,py2);
+        }
+        cx.closePath();cx.stroke();
+      }
     }
   }
 
-  // Демо танки
-  const DEMO_COUNT = 8;
-  const dTanks = [];
-
-  function mkDemoTank(){
-    const W=cv.width, H=cv.height;
-    const ci = Math.floor(Math.random()*DEMO_COLORS.length);
-    return {
-      x: 80+Math.random()*(W-160),
-      y: 80+Math.random()*(H-160),
-      angle: Math.random()*Math.PI*2,
-      turretAngle: Math.random()*Math.PI*2,
-      targetAngle: Math.random()*Math.PI*2,
-      ci,
-      alive: true,
-      shootTimer: Math.random()*60,
-      moveTimer: Math.random()*80,
-      hp: 3,
-    };
-  }
-
-  for(let i=0;i<DEMO_COUNT;i++) dTanks.push(mkDemoTank());
-
-  // Демо пули
-  const dBullets = [];
-
-  function drawDemoTank(t){
-    const c = DEMO_COLORS[t.ci];
-    cx.save(); cx.translate(t.x,t.y);
-
-    // Тень
-    cx.fillStyle='rgba(0,0,0,0.25)';
-    cx.beginPath(); cx.ellipse(3,3,16,10,0,0,Math.PI*2); cx.fill();
-
-    // Гусеницы
-    cx.rotate(t.angle);
-    cx.fillStyle=c.dark;
-    cx.fillRect(-18,-14,36,6);
-    cx.fillRect(-18,8,36,6);
-    // Корпус
-    const bg=cx.createLinearGradient(-16,-9,16,9);
-    bg.addColorStop(0,c.body); bg.addColorStop(1,c.dark);
-    cx.fillStyle=bg;
-    cx.beginPath(); cx.roundRect(-14,-9,28,18,3); cx.fill();
-    cx.strokeStyle=c.dark; cx.lineWidth=1.2; cx.stroke();
-    cx.fillStyle='rgba(255,255,255,0.15)';
-    cx.fillRect(-12,-8,18,4);
-    cx.restore();
-
-    // Башня
-    cx.save(); cx.translate(t.x,t.y); cx.rotate(t.turretAngle);
-    const tg=cx.createRadialGradient(-2,-2,1,0,0,10);
-    tg.addColorStop(0,c.body); tg.addColorStop(1,c.dark);
-    cx.beginPath(); cx.arc(0,0,10,0,Math.PI*2);
-    cx.fillStyle=tg; cx.fill();
-    cx.strokeStyle=c.dark; cx.lineWidth=1.2; cx.stroke();
-    cx.fillStyle=c.barrel;
-    cx.beginPath(); cx.roundRect(9,-3,18,6,2); cx.fill();
+  // Волны на земле
+  function drawWaves(W,H,t){
+    cx.save();
+    for(let i=3;i>=0;i--){
+      const y = H*0.55 + i*60 + Math.sin(t*0.001)*8;
+      const alpha = 0.03+i*0.012;
+      cx.strokeStyle=`rgba(57,255,20,${alpha})`;
+      cx.lineWidth=1.5;
+      cx.beginPath();
+      cx.moveTo(0,y);
+      for(let x=0;x<=W;x+=8){
+        const wy=y+Math.sin((x*0.012)+t*0.002+i)*12+Math.sin((x*0.007)+t*0.0015)*8;
+        cx.lineTo(x,wy);
+      }
+      cx.stroke();
+    }
     cx.restore();
   }
 
-  function updateDemo(){
-    const W=cv.width, H=cv.height;
-    const margin=60;
-
-    for(const t of dTanks){
-      if(!t.alive) continue;
-
-      // Ищем ближайшего врага
-      let nearest=null, nearDist=Infinity;
-      for(const e of dTanks){
-        if(e===t||!e.alive) continue;
-        const d=Math.hypot(e.x-t.x,e.y-t.y);
-        if(d<nearDist){nearDist=d;nearest=e;}
-      }
-
-      if(nearest){
-        t.turretAngle = Math.atan2(nearest.y-t.y,nearest.x-t.x);
-      }
-
-      // Движение
-      t.moveTimer--;
-      if(t.moveTimer<=0){
-        t.moveTimer=40+Math.random()*80;
-        if(nearest && nearDist>150){
-          t.targetAngle=Math.atan2(nearest.y-t.y,nearest.x-t.x)+(Math.random()-.5)*0.8;
-        } else {
-          t.targetAngle=Math.random()*Math.PI*2;
-        }
-      }
-
-      // Отворот от краёв
-      if(t.x<margin) t.targetAngle=0;
-      if(t.x>W-margin) t.targetAngle=Math.PI;
-      if(t.y<margin) t.targetAngle=Math.PI/2;
-      if(t.y>H-margin) t.targetAngle=-Math.PI/2;
-
-      // Плавный поворот
-      let da=t.targetAngle-t.angle;
-      while(da>Math.PI) da-=Math.PI*2;
-      while(da<-Math.PI) da+=Math.PI*2;
-      t.angle+=da*0.08;
-
-      t.x+=Math.cos(t.angle)*1.2;
-      t.y+=Math.sin(t.angle)*1.2;
-      t.x=Math.max(margin,Math.min(W-margin,t.x));
-      t.y=Math.max(margin,Math.min(H-margin,t.y));
-
-      // Стрельба
-      t.shootTimer--;
-      if(t.shootTimer<=0 && nearest && nearDist<300){
-        t.shootTimer=50+Math.random()*60;
-        const bx=t.x+Math.cos(t.turretAngle)*22;
-        const by=t.y+Math.sin(t.turretAngle)*22;
-        dBullets.push({x:bx,y:by,
-          vx:Math.cos(t.turretAngle)*5,
-          vy:Math.sin(t.turretAngle)*5,
-          owner:t, alive:true, trail:[], age:0});
-      }
-    }
-
-    // Пули
-    for(let i=dBullets.length-1;i>=0;i--){
-      const b=dBullets[i];
-      if(!b.alive){dBullets.splice(i,1);continue;}
-      b.trail.push({x:b.x,y:b.y});
-      if(b.trail.length>6) b.trail.shift();
-      b.x+=b.vx; b.y+=b.vy;
-      b.age++;
-      if(b.x<0||b.x>W||b.y<0||b.y>H||b.age>120){
-        b.alive=false; continue;
-      }
-      // Попадание
-      for(const t of dTanks){
-        if(t===b.owner||!t.alive) continue;
-        if(Math.hypot(t.x-b.x,t.y-b.y)<18){
-          b.alive=false;
-          t.hp--;
-          spawnDemoExplosion(b.x,b.y,DEMO_COLORS[t.ci].body);
-          if(t.hp<=0){
-            spawnDemoExplosion(t.x,t.y,DEMO_COLORS[t.ci].body);
-            t.alive=false;
-            setTimeout(()=>{
-              const nt=mkDemoTank();
-              nt.ci=t.ci;
-              Object.assign(t,nt);
-            },2000);
-          }
-          break;
-        }
-      }
-    }
-
-    // Частицы
-    for(let i=dParts.length-1;i>=0;i--){
-      const p=dParts[i];
-      if(p.type==='ring'){
-        p.r+=(p.maxR-p.r)*0.15;
-        p.alpha-=p.decay;
-      } else {
-        p.x+=p.vx; p.y+=p.vy;
-        p.vx*=0.92; p.vy*=0.92;
-        p.r*=p.type==='smoke'?1.02:0.97;
-        p.alpha-=p.decay;
-      }
-      if(p.alpha<=0) dParts.splice(i,1);
-    }
+  // Свечение прицела в центре
+  function drawCenterGlow(W,H,t){
+    const cx2=W/2, cy2=H/2;
+    const pulse=0.7+0.3*Math.sin(t*0.0015);
+    const g=cx.createRadialGradient(cx2,cy2,0,cx2,cy2,W*0.45);
+    g.addColorStop(0,`rgba(57,255,20,${0.04*pulse})`);
+    g.addColorStop(0.4,`rgba(30,100,30,${0.06*pulse})`);
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    cx.fillStyle=g;
+    cx.fillRect(0,0,W,H);
   }
 
-  function drawDemo(){
-    const W=cv.width, H=cv.height;
+  let t=0;
+  function draw(){
+    const W=cv.width,H=cv.height;
+    t++;
     cx.clearRect(0,0,W,H);
 
-    // Фон — тёмно-зелёная земля как в игре
-    const tileSize=60;
-    for(let x=0;x<W+tileSize;x+=tileSize){
-      for(let y=0;y<H+tileSize;y+=tileSize){
-        cx.fillStyle=(Math.floor(x/tileSize)+Math.floor(y/tileSize))%2===0?'#0d1f0d':'#0f240f';
-        cx.fillRect(x,y,tileSize,tileSize);
-      }
-    }
-    // Сетка
-    cx.strokeStyle='rgba(255,255,255,0.018)';
-    cx.lineWidth=0.5;
-    for(let x=0;x<W;x+=tileSize){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
-    for(let y=0;y<H;y+=tileSize){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
-
-    // Затемнение поверх фона чтобы UI читался
-    cx.fillStyle='rgba(0,0,0,0.45)';
+    // Основной фон — тёмно-зелёный градиент
+    const bg=cx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#050f05');
+    bg.addColorStop(0.5,'#071407');
+    bg.addColorStop(1,'#030d03');
+    cx.fillStyle=bg;
     cx.fillRect(0,0,W,H);
 
-    // Частицы
-    for(const p of dParts){
-      cx.globalAlpha=p.alpha;
-      if(p.type==='ring'){
-        cx.beginPath(); cx.arc(p.x,p.y,p.r,0,Math.PI*2);
-        cx.strokeStyle=p.color; cx.lineWidth=2; cx.stroke();
-      } else if(p.type==='smoke'){
-        cx.fillStyle='rgba(60,60,60,0.4)';
-        cx.beginPath(); cx.arc(p.x,p.y,p.r,0,Math.PI*2); cx.fill();
-      } else {
-        cx.fillStyle=p.color;
-        cx.beginPath(); cx.arc(p.x,p.y,p.r*p.alpha,0,Math.PI*2); cx.fill();
-      }
+    // Шестиугольная сетка
+    drawHexGrid(W,H,t);
+
+    // Центральное свечение
+    drawCenterGlow(W,H,t);
+
+    // Горизонтальные волны
+    drawWaves(W,H,t);
+
+    // Светлячки/пыль
+    for(const p of particles){
+      p.pulse+=p.pulseSpeed;
+      p.x+=p.speedX;
+      p.y+=p.speedY;
+      if(p.y<-0.02) p.y=1.02;
+      if(p.x<-0.02) p.x=1.02;
+      if(p.x>1.02) p.x=-0.02;
+
+      const px=p.x*W, py=p.y*H;
+      const glow=0.4+0.6*Math.abs(Math.sin(p.pulse));
+      const [r,g2,b]=p.color;
+
+      // Свечение
+      const gr=cx.createRadialGradient(px,py,0,px,py,p.size*5);
+      gr.addColorStop(0,`rgba(${r},${g2},${b},${p.alpha*glow*0.4})`);
+      gr.addColorStop(1,`rgba(${r},${g2},${b},0)`);
+      cx.fillStyle=gr;
+      cx.beginPath();cx.arc(px,py,p.size*5,0,Math.PI*2);cx.fill();
+
+      // Ядро
+      cx.globalAlpha=p.alpha*glow;
+      cx.fillStyle=`rgb(${r},${g2},${b})`;
+      cx.beginPath();cx.arc(px,py,p.size,0,Math.PI*2);cx.fill();
       cx.globalAlpha=1;
     }
 
-    // Пули
-    for(const b of dBullets){
-      if(!b.alive) continue;
-      for(let i=0;i<b.trail.length;i++){
-        const tp=b.trail[i], t=i/b.trail.length;
-        cx.beginPath(); cx.arc(tp.x,tp.y,3*t,0,Math.PI*2);
-        cx.fillStyle=`rgba(255,${Math.floor(100+80*t)},0,${t*0.5})`; cx.fill();
-      }
-      const angle=Math.atan2(b.vy,b.vx);
-      cx.save(); cx.translate(b.x,b.y); cx.rotate(angle);
-      const bg=cx.createLinearGradient(0,-2,0,2);
-      bg.addColorStop(0,'#ffe566'); bg.addColorStop(1,'#ff8800');
-      cx.fillStyle=bg;
-      cx.beginPath(); cx.ellipse(0,0,6,2.5,0,0,Math.PI*2); cx.fill();
-      cx.restore();
-    }
+    // Виньетка по краям
+    const vig=cx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,W*0.75);
+    vig.addColorStop(0,'rgba(0,0,0,0)');
+    vig.addColorStop(1,'rgba(0,0,0,0.65)');
+    cx.fillStyle=vig;
+    cx.fillRect(0,0,W,H);
 
-    // Танки
-    for(const t of dTanks) if(t.alive) drawDemoTank(t);
+    requestAnimationFrame(draw);
   }
-
-  function demoLoop(){
-    const menuActive = document.getElementById('menuScreen').classList.contains('active');
-    if(menuActive){
-      updateDemo();
-      drawDemo();
-    }
-    requestAnimationFrame(demoLoop);
-  }
-  demoLoop();
+  draw();
 })();
 
-const nickInput = document.getElementById('nickInput');
+// ══ МОБИЛЬНЫЕ ДЖОЙСТИКИ ══
+(function(){
+  function isMobile(){ return 'ontouchstart' in window || navigator.maxTouchPoints > 0; }
+
+  const jLeft  = document.getElementById('joystickLeft');
+  const jRight = document.getElementById('joystickRight');
+  const fireRing = document.getElementById('fireRing');
+  const knobL  = jLeft.querySelector('.joy-knob');
+  const knobR  = jRight.querySelector('.joy-knob');
+
+  const MAX_R = 38; // макс смещение ручки
+
+  let leftId=null,  rightId=null;
+  let leftDx=0, leftDy=0;
+  let rightDx=0, rightDy=0;
+  let leftActive=false, rightActive=false;
+
+  function showJoysticks(show){
+    jLeft.style.display  = show ? 'block' : 'none';
+    jRight.style.display = show ? 'block' : 'none';
+    fireRing.style.display = show ? 'block' : 'none';
+  }
+
+  // Показываем только в игре
+  function updateJoyVisibility(){
+    const show = running && isMobile();
+    showJoysticks(show);
+  }
+
+  // Центр джойстика
+  function getCenter(el){
+    const r = el.getBoundingClientRect();
+    return { x: r.left+r.width/2, y: r.top+r.height/2 };
+  }
+
+  // Обновить позицию ручки
+  function setKnob(knob, dx, dy){
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  }
+
+  // Левый джойстик — движение
+  function applyLeft(dx, dy){
+    const len = Math.hypot(dx,dy);
+    if(len < 8){ leftDx=0; leftDy=0; return; }
+    leftDx = dx/len; leftDy = dy/len;
+  }
+
+  // Правый джойстик — прицел + огонь
+  function applyRight(dx, dy){
+    rightDx=dx; rightDy=dy;
+    const len=Math.hypot(dx,dy);
+    if(len>10 && player && player.alive){
+      // Направление прицела относительно центра экрана
+      const angle=Math.atan2(dy,dx);
+      player.turretAngle=angle;
+      mouseDown=true;
+    } else {
+      mouseDown=false;
+    }
+  }
+
+  jLeft.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t=e.changedTouches[0];
+    leftId=t.identifier; leftActive=true;
+  },{passive:false});
+
+  jRight.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t=e.changedTouches[0];
+    rightId=t.identifier; rightActive=true;
+    fireRing.classList.add('shooting');
+  },{passive:false});
+
+  window.addEventListener('touchmove', e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      if(t.identifier===leftId && leftActive){
+        const c=getCenter(jLeft);
+        let dx=t.clientX-c.x, dy=t.clientY-c.y;
+        const len=Math.hypot(dx,dy);
+        if(len>MAX_R){ dx=dx/len*MAX_R; dy=dy/len*MAX_R; }
+        setKnob(knobL,dx,dy);
+        applyLeft(dx,dy);
+      }
+      if(t.identifier===rightId && rightActive){
+        const c=getCenter(jRight);
+        let dx=t.clientX-c.x, dy=t.clientY-c.y;
+        const len=Math.hypot(dx,dy);
+        if(len>MAX_R){ dx=dx/len*MAX_R; dy=dy/len*MAX_R; }
+        setKnob(knobR,dx,dy);
+        applyRight(dx,dy);
+      }
+    }
+  },{passive:false});
+
+  window.addEventListener('touchend', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===leftId){
+        leftId=null; leftActive=false;
+        leftDx=0; leftDy=0;
+        setKnob(knobL,0,0);
+      }
+      if(t.identifier===rightId){
+        rightId=null; rightActive=false;
+        rightDx=0; rightDy=0;
+        mouseDown=false;
+        setKnob(knobR,0,0);
+        fireRing.classList.remove('shooting');
+      }
+    }
+  });
+
+  // Переопределяем движение игрока для мобильных
+  const _origUpdatePlayer = updatePlayer;
+  updatePlayer = function(dt){
+    _origUpdatePlayer(dt);
+    if(!isMobile() || !player || !player.alive) return;
+    // Левый джойстик — двигаем танк
+    if(leftActive && (Math.abs(leftDx)>0.1 || Math.abs(leftDy)>0.1)){
+      const targetAngle=Math.atan2(leftDy,leftDx);
+      let da=targetAngle-player.angle;
+      while(da>Math.PI) da-=Math.PI*2;
+      while(da<-Math.PI) da+=Math.PI*2;
+      player.angle+=da*0.18;
+      const spd=TANK_SPEED;
+      const nx=player.x+Math.cos(player.angle)*spd;
+      const ny=player.y+Math.sin(player.angle)*spd;
+      if(!hasWallRect(nx,player.y,18)&&nx>50&&nx<WORLD-50) player.x=nx;
+      if(!hasWallRect(player.x,ny,18)&&ny>50&&ny<WORLD-50) player.y=ny;
+    }
+    // Камера
+    camX+=(player.x-W/2-camX)*0.1;
+    camY+=(player.y-H/2-camY)*0.1;
+    // Прицел правого джойстика
+    if(rightActive) player.turretAngle=Math.atan2(rightDy,rightDx);
+    // Обновляем видимость
+    updateJoyVisibility();
+  };
+
+  // Показываем/скрываем при старте и смерти
+  const _origStartGame = startGame;
+  startGame = function(){
+    _origStartGame();
+    setTimeout(()=>updateJoyVisibility(), 700);
+  };
+  const _origShowDeath = showDeath;
+  showDeath = function(){
+    _origShowDeath();
+    showJoysticks(false);
+  };
+
+  if(isMobile()) showJoysticks(false);
+})();
 nickInput.value = localStorage.getItem('tankx_nick') || '';
 nickInput.addEventListener('input', () => { localStorage.setItem('tankx_nick', nickInput.value); });
 nickInput.addEventListener('keydown', e => { if(e.key==='Enter') startGame(); });
