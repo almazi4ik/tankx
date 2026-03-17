@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>TankX</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a0f;overflow:hidden;font-family:'Nunito',sans-serif;user-select:none;}
+#gameCanvas{display:block;position:fixed;inset:0;cursor:crosshair;}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:10;}
+
+/* HUD */
+#hpBar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.1);border-radius:50px;padding:8px 18px;}
+#hpTrack{width:160px;height:10px;background:rgba(255,255,255,0.1);border-radius:10px;overflow:hidden;}
+#hpFill{height:100%;border-radius:10px;background:linear-gradient(90deg,#e74c3c,#ff6b6b);transition:width .15s;}
+#hpLabel{font-family:'Fredoka One',cursive;font-size:14px;color:#fff;min-width:32px;text-align:right;}
+#ammoWrap{display:flex;gap:4px;align-items:center;}
+.ammo-dot{width:8px;height:8px;border-radius:50%;background:#f9ca24;transition:background .1s;}
+.ammo-dot.empty{background:rgba(255,255,255,0.15);}
+#reloadBar{position:fixed;bottom:58px;left:50%;transform:translateX(-50%);width:180px;height:4px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;opacity:0;transition:opacity .2s;}
+#reloadFill{height:100%;background:#f9ca24;border-radius:4px;width:0%;}
+
+#scoreBoard{position:fixed;top:16px;right:16px;background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:12px 16px;min-width:160px;}
+#scoreBoard .sb-title{font-family:'Fredoka One',cursive;font-size:13px;color:#f9ca24;letter-spacing:2px;text-align:center;margin-bottom:8px;}
+.sb-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;font-weight:800;color:#d4f5e9;border-bottom:1px solid rgba(255,255,255,0.05);}
+.sb-row:last-child{border:none;}
+.sb-row.me{color:#f9ca24;}
+.sb-rank{color:rgba(255,255,255,0.3);width:16px;font-size:11px;}
+.sb-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sb-kills{font-family:'Fredoka One',cursive;color:#ff6b6b;}
+.tank-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+
+#killFeed{position:fixed;top:16px;left:16px;display:flex;flex-direction:column;gap:5px;pointer-events:none;}
+.kf-item{background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:800;color:#fff;animation:kfIn .2s ease,kfOut .4s ease 2.5s forwards;white-space:nowrap;}
+@keyframes kfIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes kfOut{to{opacity:0;transform:translateX(-10px)}}
+
+/* ЭКРАНЫ */
+.screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s;visibility:hidden;}
+.screen.active{opacity:1;pointer-events:all;visibility:visible;}
+
+#menuScreen{background:radial-gradient(ellipse 100% 80% at 50% 0%,#1a1030 0%,#080510 60%,#020208 100%);}
+.logo-tank{font-family:'Fredoka One',cursive;font-size:90px;line-height:1;filter:drop-shadow(0 0 40px #f9ca2488);}
+.logo-tank .lt{color:#f9ca24;}.logo-tank .la{color:#ff9f43;}.logo-tank .ln{color:#ff6b6b;}.logo-tank .lk{color:#ff4e4e;}.logo-tank .lx{color:#a29bfe;}
+.logo-sub{font-family:'Fredoka One',cursive;font-size:16px;color:rgba(255,255,255,0.3);letter-spacing:4px;margin-top:4px;}
+.btn-play-tank{background:linear-gradient(180deg,#f9ca24 0%,#e0a800 50%,#c48f00 100%);border:none;border-radius:60px;color:#1a0a00;font-family:'Fredoka One',cursive;font-size:36px;letter-spacing:3px;padding:18px 70px;cursor:pointer;box-shadow:0 6px 0 #7a5500,0 10px 30px rgba(249,202,36,0.4);transition:transform .1s;margin-top:48px;}
+.btn-play-tank:hover{transform:translateY(-3px);}
+.btn-play-tank:active{transform:translateY(3px);}
+.controls-hint{margin-top:24px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;}
+.hint-item{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 14px;font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:6px;}
+.hint-key{background:rgba(255,255,255,0.12);border-radius:5px;padding:2px 7px;font-family:'Fredoka One',cursive;font-size:13px;color:#fff;}
+
+#deathScreen{background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);}
+.death-title{font-family:'Fredoka One',cursive;font-size:72px;color:#ff4e4e;filter:drop-shadow(0 0 30px #ff4e4e88);}
+.death-stats{display:flex;gap:20px;margin:20px 0 30px;flex-wrap:wrap;justify-content:center;}
+.ds-card{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:14px 24px;text-align:center;}
+.ds-val{font-family:'Fredoka One',cursive;font-size:36px;color:#f9ca24;}
+.ds-lbl{font-size:11px;font-weight:800;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-top:2px;}
+.btn-restart-tank{background:linear-gradient(135deg,#e74c3c,#ff6b6b);border:none;border-radius:60px;color:#fff;font-family:'Fredoka One',cursive;font-size:28px;padding:15px 58px;cursor:pointer;box-shadow:0 6px 28px rgba(231,76,60,0.5);}
+.btn-restart-tank:hover{transform:scale(1.05);}
+.btn-menu-tank{background:transparent;border:2px solid rgba(255,255,255,0.2);border-radius:60px;color:#fff;font-family:'Fredoka One',cursive;font-size:18px;padding:11px 36px;cursor:pointer;margin-top:12px;}
+.btn-menu-tank:hover{background:rgba(255,255,255,0.08);}
+
+#toastWrap{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}
+.toast{background:rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.15);border-radius:50px;padding:7px 20px;font-family:'Fredoka One',cursive;font-size:15px;color:#fff;animation:toastIn .3s ease,toastOut .4s ease 1.8s forwards;white-space:nowrap;}
+@keyframes toastIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(-8px)}}
+</style>
+</head>
+<body>
+
+<!-- МЕНЮ -->
+<div id="menuScreen" class="screen active">
+  <div class="logo-tank">
+    <span class="lt">T</span><span class="la">a</span><span class="ln">n</span><span class="lk">k</span><span class="lx">X</span>
+  </div>
+  <div class="logo-sub">TANK ARENA</div>
+  <button class="btn-play-tank" id="playBtn">ИГРАТЬ</button>
+  <div class="controls-hint">
+    <div class="hint-item"><span class="hint-key">WASD</span> или <span class="hint-key">↑↓←→</span> движение</div>
+    <div class="hint-item"><span class="hint-key">ЛКМ</span> выстрел</div>
+    <div class="hint-item"><span class="hint-key">R</span> перезарядка</div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="ui">
+  <div id="hpBar">
+    <span style="font-size:16px">❤️</span>
+    <div id="hpTrack"><div id="hpFill" style="width:100%"></div></div>
+    <span id="hpLabel">100</span>
+    <div id="ammoWrap"></div>
+  </div>
+  <div id="reloadBar"><div id="reloadFill"></div></div>
+  <div id="scoreBoard">
+    <div class="sb-title">☠️ KILLS</div>
+    <div id="sbList"></div>
+  </div>
+  <div id="killFeed"></div>
+</div>
+
+<!-- СМЕРТЬ -->
+<div id="deathScreen" class="screen">
+  <div class="death-title">УНИЧТОЖЕН!</div>
+  <div class="death-stats">
+    <div class="ds-card"><div class="ds-val" id="dsKills">0</div><div class="ds-lbl">УБИЙСТВ</div></div>
+    <div class="ds-card"><div class="ds-val" id="dsShots">0</div><div class="ds-lbl">ВЫСТРЕЛОВ</div></div>
+    <div class="ds-card"><div class="ds-val" id="dsAccuracy">0%</div><div class="ds-lbl">ТОЧНОСТЬ</div></div>
+    <div class="ds-card"><div class="ds-val" id="dsSurvive">0с</div><div class="ds-lbl">ВЫЖИВАНИЕ</div></div>
+  </div>
+  <button class="btn-restart-tank" id="restartBtn">ЕЩЁ РАЗ!</button>
+  <button class="btn-menu-tank" id="menuBtn">ГЛАВНОЕ МЕНЮ</button>
+</div>
+
+<div id="toastWrap"></div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize(){ W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+// ══ КОНСТАНТЫ ══
+const WORLD = 3000;
+const TILE = 60;
+const MAX_HP = 100;
+const BULLET_SPEED = 9;
+const TANK_SPEED = 2.4;
+const TANK_SPEED_BOOST = 3.8;
+const MAX_AMMO = 5;
+const RELOAD_TIME = 2200; // мс на один патрон
+const BULLET_DMG = 28;
+const BOT_COUNT = 8;
+const RESPAWN_DELAY = 3000;
+
+// Цвета танков
+const TANK_COLORS = [
+  {body:'#f9ca24',dark:'#c48f00',barrel:'#a07000'},
+  {body:'#ff6b9d',dark:'#c0395f',barrel:'#901040'},
+  {body:'#00e5cc',dark:'#009988',barrel:'#007060'},
+  {body:'#a29bfe',dark:'#6c5ce7',barrel:'#4a3cb0'},
+  {body:'#ff9f43',dark:'#c06a10',barrel:'#904800'},
+  {body:'#39ff14',dark:'#1a9900',barrel:'#107000'},
+  {body:'#ff4e4e',dark:'#b02020',barrel:'#801010'},
+  {body:'#4db8ff',dark:'#1a7ac0',barrel:'#0a5090'},
+];
+const BOT_NAMES = ['Cobra','Viper','Ghost','Shadow','Blaze','Storm','Raven','Titan','Fury','Zeus','Axe','Nova'];
+
+// ══ СОСТОЯНИЕ ИГРЫ ══
+let running = false;
+let tanks = [];
+let bullets = [];
+let particles = [];
+let walls = [];
+let player = null;
+let camX = 0, camY = 0;
+let mouseX = W/2, mouseY = H/2;
+let mouseDown = false;
+let keys = {};
+let playerKills = 0, playerShots = 0, playerHits = 0;
+let startTime = 0;
+let animId = null;
+
+// ══ КАРТА ══
+const MAP_LAYOUT = (function(){
+  // Генерируем стены — симметричная арена с укрытиями
+  const map = [];
+  const G = Math.floor(WORLD/TILE);
+  // Границы
+  for(let x=0;x<G;x++){ map.push({x:x*TILE,y:0}); map.push({x:x*TILE,y:(G-1)*TILE}); }
+  for(let y=1;y<G-1;y++){ map.push({x:0,y:y*TILE}); map.push({x:(G-1)*TILE,y:y*TILE}); }
+  // Внутренние блоки (симметрично)
+  const blocks = [
+    [5,5],[5,6],[6,5],
+    [5,G-6],[5,G-7],[6,G-6],
+    [G-6,5],[G-7,5],[G-6,6],
+    [G-6,G-6],[G-7,G-6],[G-6,G-7],
+    [Math.floor(G/2),Math.floor(G/2)-1],
+    [Math.floor(G/2),Math.floor(G/2)],
+    [Math.floor(G/2)-1,Math.floor(G/2)],
+    [Math.floor(G/2)+1,Math.floor(G/2)],
+    [Math.floor(G/2),Math.floor(G/2)+1],
+    [10,Math.floor(G/2)],[G-11,Math.floor(G/2)],
+    [Math.floor(G/2),10],[Math.floor(G/2),G-11],
+    [8,8],[G-9,8],[8,G-9],[G-9,G-9],
+    [15,15],[G-16,15],[15,G-16],[G-16,G-16],
+  ];
+  blocks.forEach(([bx,by])=>map.push({x:bx*TILE,y:by*TILE}));
+  return map;
+})();
+
+// Быстрый поиск стен
+const wallSet = new Set(MAP_LAYOUT.map(w=>w.x+'_'+w.y));
+function hasWall(x,y){ return wallSet.has((Math.floor(x/TILE)*TILE)+'_'+(Math.floor(y/TILE)*TILE)); }
+function hasWallRect(x,y,r){
+  for(let dx=-r;dx<=r;dx+=r) for(let dy=-r;dy<=r;dy+=r) if(hasWall(x+dx,y+dy)) return true;
+  return false;
+}
+
+// ══ ТАНК ══
+function mkTank(x, y, name, colorIdx, isPlayer){
+  return {
+    x, y, name,
+    angle: Math.random()*Math.PI*2,
+    turretAngle: 0,
+    hp: MAX_HP,
+    maxHp: MAX_HP,
+    ammo: MAX_AMMO,
+    reloading: false,
+    reloadStart: 0,
+    reloadQueue: 0,
+    colorIdx: colorIdx % TANK_COLORS.length,
+    isPlayer,
+    alive: true,
+    kills: 0,
+    shots: 0,
+    speed: TANK_SPEED,
+    vx: 0, vy: 0,
+    // Бот
+    botTarget: null,
+    botShootTimer: 0,
+    botMoveTimer: 0,
+    botAngle: Math.random()*Math.PI*2,
+    botStrafeDir: 1,
+    botRespawnAt: 0,
+    _deadTime: 0,
+  };
+}
+
+// Случайная безопасная позиция
+function safeSpawn(){
+  let x,y,tries=0;
+  do{ x=200+Math.random()*(WORLD-400); y=200+Math.random()*(WORLD-400); tries++; }
+  while(hasWallRect(x,y,30) && tries<100);
+  return {x,y};
+}
+
+function initGame(){
+  tanks=[]; bullets=[]; particles=[];
+  playerKills=0; playerShots=0; playerHits=0;
+  startTime=Date.now();
+  const sp = safeSpawn();
+  player = mkTank(sp.x, sp.y, 'YOU', 0, true);
+  tanks.push(player);
+  for(let i=0;i<BOT_COUNT;i++){
+    const s=safeSpawn();
+    const bot=mkTank(s.x,s.y,BOT_NAMES[i%BOT_NAMES.length],i+1,false);
+    tanks.push(bot);
+  }
+  camX=player.x-W/2; camY=player.y-H/2;
+}
+
+// ══ СТРЕЛЬБА ══
+function shoot(tank){
+  if(!tank.alive||tank.ammo<=0) return;
+  tank.ammo--;
+  tank.shots++;
+  if(tank.isPlayer) playerShots++;
+  const angle = tank.turretAngle;
+  const bx = tank.x + Math.cos(angle)*26;
+  const by = tank.y + Math.sin(angle)*26;
+  bullets.push({
+    x:bx, y:by,
+    vx:Math.cos(angle)*BULLET_SPEED,
+    vy:Math.sin(angle)*BULLET_SPEED,
+    owner:tank,
+    alive:true,
+    bounces:2, // рикошет!
+    trail:[],
+  });
+  // Мигание вспышки
+  spawnMuzzleFlash(bx,by,angle,tank.colorIdx);
+  // Начать перезарядку одного патрона
+  if(!tank.reloading){
+    tank.reloading=true;
+    tank.reloadStart=Date.now();
+  } else {
+    tank.reloadQueue++;
+  }
+}
+
+function updateReload(tank){
+  if(!tank.reloading) return;
+  const elapsed = Date.now()-tank.reloadStart;
+  if(elapsed>=RELOAD_TIME){
+    tank.ammo=Math.min(MAX_AMMO,tank.ammo+1);
+    if(tank.ammo<MAX_AMMO||tank.reloadQueue>0){
+      tank.reloadQueue=Math.max(0,tank.reloadQueue-1);
+      tank.reloadStart=Date.now();
+    } else {
+      tank.reloading=false;
+    }
+  }
+}
+
+// ══ ЧАСТИЦЫ ══
+function spawnExplosion(x,y,color,count=18){
+  for(let i=0;i<count;i++){
+    const angle=Math.random()*Math.PI*2;
+    const speed=1+Math.random()*5;
+    particles.push({
+      x,y,
+      vx:Math.cos(angle)*speed,
+      vy:Math.sin(angle)*speed,
+      r:3+Math.random()*5,
+      color,
+      alpha:1,
+      decay:0.02+Math.random()*0.03,
+      type:'spark'
+    });
+  }
+  // Дым
+  for(let i=0;i<8;i++){
+    const angle=Math.random()*Math.PI*2;
+    particles.push({
+      x:x+(Math.random()-.5)*20,y:y+(Math.random()-.5)*20,
+      vx:Math.cos(angle)*0.6,vy:Math.sin(angle)*0.6-0.5,
+      r:8+Math.random()*14,
+      color:'rgba(60,60,60,',
+      alpha:0.7,decay:0.012,type:'smoke'
+    });
+  }
+}
+
+function spawnMuzzleFlash(x,y,angle,ci){
+  const c=TANK_COLORS[ci%TANK_COLORS.length];
+  for(let i=0;i<6;i++){
+    const a=angle+(Math.random()-.5)*0.6;
+    particles.push({x,y,vx:Math.cos(a)*(3+Math.random()*4),vy:Math.sin(a)*(3+Math.random()*4),r:2+Math.random()*3,color:c.body,alpha:1,decay:0.08,type:'spark'});
+  }
+}
+
+function spawnHitSpark(x,y){
+  for(let i=0;i<6;i++){
+    const a=Math.random()*Math.PI*2;
+    particles.push({x,y,vx:Math.cos(a)*2,vy:Math.sin(a)*2,r:2,color:'#ffdd00',alpha:1,decay:0.07,type:'spark'});
+  }
+}
+
+// ══ БОТ ИИ ══
+function updateBot(bot, dt){
+  if(!bot.alive){
+    if(Date.now()>=bot.botRespawnAt){
+      const s=safeSpawn();
+      bot.x=s.x; bot.y=s.y;
+      bot.hp=MAX_HP; bot.ammo=MAX_AMMO;
+      bot.alive=true; bot.reloading=false;
+    }
+    return;
+  }
+
+  // Выбираем цель — ближайший живой танк
+  let nearest=null, nearDist=Infinity;
+  for(const t of tanks){
+    if(t===bot||!t.alive) continue;
+    const d=Math.hypot(t.x-bot.x,t.y-bot.y);
+    if(d<nearDist){nearDist=d;nearest=t;}
+  }
+  bot.botTarget=nearest;
+
+  bot.botMoveTimer-=dt;
+  bot.botShootTimer-=dt;
+
+  if(nearest){
+    const toTarget=Math.atan2(nearest.y-bot.y,nearest.x-bot.x);
+    bot.turretAngle=toTarget;
+
+    // Движение: преследование + уклонение
+    if(bot.botMoveTimer<=0){
+      bot.botMoveTimer=600+Math.random()*800;
+      if(nearDist>300){
+        // Идём к цели с небольшим зигзагом
+        bot.botAngle=toTarget+(Math.random()-.5)*0.6;
+      } else {
+        // Страфим вокруг цели
+        bot.botStrafeDir*=Math.random()<0.3?-1:1;
+        bot.botAngle=toTarget+Math.PI/2*bot.botStrafeDir+(Math.random()-.5)*0.4;
+      }
+    }
+
+    // Стрельба если цель в прицеле и нет стены между нами
+    if(bot.botShootTimer<=0 && bot.ammo>0 && nearDist<600){
+      const angleDiff=Math.abs(((toTarget-bot.turretAngle)+Math.PI*3)%(Math.PI*2)-Math.PI);
+      if(angleDiff<0.15){
+        shoot(bot);
+        bot.botShootTimer=400+Math.random()*600;
+      }
+    }
+  } else {
+    // Бродим
+    if(bot.botMoveTimer<=0){
+      bot.botMoveTimer=1000+Math.random()*1500;
+      bot.botAngle=Math.random()*Math.PI*2;
+    }
+    bot.turretAngle=bot.botAngle;
+  }
+
+  // Двигаемся
+  const spd = bot.hp < 40 ? TANK_SPEED_BOOST : TANK_SPEED;
+  let nx=bot.x+Math.cos(bot.botAngle)*spd;
+  let ny=bot.y+Math.sin(bot.botAngle)*spd;
+  if(hasWallRect(nx,ny,18)||nx<50||nx>WORLD-50||ny<50||ny>WORLD-50){
+    bot.botAngle+=Math.PI/2+Math.random()*Math.PI;
+    bot.botMoveTimer=0;
+  } else {
+    bot.x=nx; bot.y=ny;
+    bot.angle=bot.botAngle;
+  }
+
+  updateReload(bot);
+}
+
+// ══ ИГРОК ══
+function updatePlayer(dt){
+  if(!player.alive) return;
+
+  // Поворот башни к мыши
+  player.turretAngle=Math.atan2((mouseY+camY)-player.y,(mouseX+camX)-player.x);
+
+  // Движение WASD / стрелки
+  let dx=0,dy=0;
+  if(keys['ArrowUp']||keys['KeyW']||keys['Ц']||keys['ц']) dy=-1;
+  if(keys['ArrowDown']||keys['KeyS']||keys['Ы']||keys['ы']) dy=1;
+  if(keys['ArrowLeft']||keys['KeyA']||keys['Ф']||keys['ф']) dx=-1;
+  if(keys['ArrowRight']||keys['KeyD']||keys['В']||keys['в']) dx=1;
+
+  if(dx||dy){
+    const angle=Math.atan2(dy,dx);
+    player.angle=angle;
+    const spd=TANK_SPEED+(keys['ShiftLeft']?1:0);
+    const nx=player.x+Math.cos(angle)*spd;
+    const ny=player.y+Math.sin(angle)*spd;
+    if(!hasWallRect(nx,player.y,18)&&nx>50&&nx<WORLD-50) player.x=nx;
+    if(!hasWallRect(player.x,ny,18)&&ny>50&&ny<WORLD-50) player.y=ny;
+  }
+
+  // Стрельба удержанием ЛКМ
+  if(mouseDown && player.ammo>0 && !player._shootCooldown){
+    shoot(player);
+    player._shootCooldown=180;
+  }
+  if(player._shootCooldown) player._shootCooldown=Math.max(0,player._shootCooldown-dt);
+
+  // Ручная перезарядка R
+  if(keys['KeyR']||keys['К']||keys['к']){
+    if(!player.reloading&&player.ammo<MAX_AMMO){
+      player.reloading=true;
+      player.reloadStart=Date.now();
+    }
+  }
+
+  updateReload(player);
+
+  // Камера плавно следует за игроком
+  camX+=(player.x-W/2-camX)*0.1;
+  camY+=(player.y-H/2-camY)*0.1;
+}
+
+// ══ ПУЛИ ══
+function updateBullets(){
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    if(!b.alive){bullets.splice(i,1);continue;}
+
+    // Трейл
+    b.trail.push({x:b.x,y:b.y});
+    if(b.trail.length>8) b.trail.shift();
+
+    b.x+=b.vx; b.y+=b.vy;
+
+    // Стены
+    const wallX=hasWall(b.x,b.y);
+    if(wallX||b.x<10||b.x>WORLD-10||b.y<10||b.y>WORLD-10){
+      if(b.bounces>0){
+        // Рикошет
+        if(hasWall(b.x-b.vx,b.y)||b.x<10||b.x>WORLD-10) b.vx*=-1;
+        else b.vy*=-1;
+        b.bounces--;
+        spawnHitSpark(b.x,b.y);
+        b.x+=b.vx; b.y+=b.vy;
+      } else {
+        spawnExplosion(b.x,b.y,'#ffdd00',8);
+        b.alive=false;
+      }
+      continue;
+    }
+
+    // Попадание в танки
+    for(const t of tanks){
+      if(t===b.owner||!t.alive) continue;
+      if(Math.hypot(t.x-b.x,t.y-b.y)<22){
+        t.hp-=BULLET_DMG;
+        spawnExplosion(b.x,b.y,TANK_COLORS[t.colorIdx].body,12);
+        b.alive=false;
+        if(b.owner.isPlayer) playerHits++;
+        if(t.hp<=0){
+          t.alive=false;
+          t._deadTime=Date.now();
+          spawnExplosion(t.x,t.y,TANK_COLORS[t.colorIdx].body,30);
+          spawnExplosion(t.x,t.y,'#ff4400',20);
+          b.owner.kills++;
+          if(b.owner.isPlayer){
+            playerKills++;
+            addKillFeed('ты', t.name, TANK_COLORS[0].body, TANK_COLORS[t.colorIdx].body);
+            showToast('💥 +1 убийство!','#ff6b6b');
+          } else if(t.isPlayer){
+            addKillFeed(b.owner.name, 'тебя', TANK_COLORS[b.owner.colorIdx].body, TANK_COLORS[0].body);
+          } else {
+            addKillFeed(b.owner.name, t.name, TANK_COLORS[b.owner.colorIdx].body, TANK_COLORS[t.colorIdx].body);
+          }
+          if(!t.isPlayer){
+            t.botRespawnAt=Date.now()+RESPAWN_DELAY;
+          } else {
+            // Игрок умер
+            setTimeout(showDeath, 800);
+          }
+        }
+        break;
+      }
+    }
+  }
+}
+
+// ══ РИСОВАНИЕ ══
+function drawTile(x, y){
+  const px=x-camX, py=y-camY;
+  if(px<-TILE||px>W||py<-TILE||py>H) return;
+  // Блок стены
+  ctx.fillStyle='#1a1a2e';
+  ctx.fillRect(px,py,TILE,TILE);
+  ctx.fillStyle='#252545';
+  ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
+  ctx.fillStyle='rgba(255,255,255,0.03)';
+  ctx.fillRect(px+2,py+2,TILE-4,6);
+  ctx.strokeStyle='rgba(162,155,254,0.2)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(px+0.5,py+0.5,TILE-1,TILE-1);
+}
+
+function drawTank(t){
+  if(!t.alive) return;
+  const px=t.x-camX, py=t.y-camY;
+  if(px<-60||px>W+60||py<-60||py>H+60) return;
+  const c=TANK_COLORS[t.colorIdx%TANK_COLORS.length];
+
+  ctx.save();
+  ctx.translate(px,py);
+
+  // Тень под танком
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(3,3,18,12,0,0,Math.PI*2);
+  ctx.fill();
+
+  // Корпус (повёрнут по направлению движения)
+  ctx.rotate(t.angle);
+  // Гусеницы
+  ctx.fillStyle=c.dark;
+  ctx.fillRect(-20,-16,40,7);
+  ctx.fillRect(-20,9,40,7);
+  // Детали гусениц
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  for(let i=-18;i<20;i+=8){ctx.fillRect(i,-16,4,7);ctx.fillRect(i,9,4,7);}
+  // Корпус
+  ctx.fillStyle=c.body;
+  ctx.beginPath();
+  ctx.roundRect(-16,-10,32,20,4);
+  ctx.fill();
+  ctx.strokeStyle=c.dark;
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+  // Блик
+  ctx.fillStyle='rgba(255,255,255,0.18)';
+  ctx.fillRect(-12,-8,20,5);
+  ctx.restore();
+
+  // Башня (отдельное вращение)
+  ctx.save();
+  ctx.translate(px,py);
+  ctx.rotate(t.turretAngle);
+  // Башня
+  ctx.fillStyle=c.body;
+  ctx.beginPath();
+  ctx.arc(0,0,11,0,Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle=c.dark;
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+  // Ствол
+  ctx.fillStyle=c.barrel;
+  ctx.fillRect(10,-4,22,8);
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.fillRect(10,-4,22,3);
+  ctx.restore();
+
+  // HP бар (только если не полный)
+  if(t.hp<t.maxHp){
+    const bw=40,bh=5;
+    const bx=px-bw/2,by=py-30;
+    ctx.fillStyle='rgba(0,0,0,0.6)';
+    ctx.fillRect(bx,by,bw,bh);
+    const hpPct=t.hp/t.maxHp;
+    ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f9ca24':'#e74c3c';
+    ctx.fillRect(bx,by,bw*hpPct,bh);
+  }
+
+  // Имя
+  ctx.font=`bold 11px Nunito,sans-serif`;
+  ctx.textAlign='center';
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillText(t.name,px+1,py-34+1);
+  ctx.fillStyle=t.isPlayer?'#f9ca24':'#fff';
+  ctx.fillText(t.name,px,py-34);
+}
+
+function drawBullet(b){
+  if(!b.alive) return;
+  const px=b.x-camX, py=b.y-camY;
+  // Трейл
+  for(let i=0;i<b.trail.length;i++){
+    const tp=b.trail[i];
+    const alpha=(i/b.trail.length)*0.5;
+    ctx.beginPath();
+    ctx.arc(tp.x-camX,tp.y-camY,3*(i/b.trail.length),0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,220,50,${alpha})`;
+    ctx.fill();
+  }
+  // Снаряд
+  ctx.beginPath();
+  ctx.arc(px,py,5,0,Math.PI*2);
+  ctx.fillStyle='#ffdd00';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(px-1,py-1,2,0,Math.PI*2);
+  ctx.fillStyle='#fff';
+  ctx.fill();
+}
+
+function drawParticle(p){
+  ctx.globalAlpha=p.alpha;
+  if(p.type==='smoke'){
+    ctx.fillStyle=`rgba(60,60,60,${p.alpha*0.5})`;
+    ctx.beginPath();
+    ctx.arc(p.x-camX,p.y-camY,p.r,0,Math.PI*2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(p.x-camX,p.y-camY,p.r*p.alpha,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawBackground(){
+  // Тёмная плитка фона
+  const tileSize=TILE;
+  const startX=Math.floor(camX/tileSize)*tileSize;
+  const startY=Math.floor(camY/tileSize)*tileSize;
+  for(let x=startX;x<camX+W+tileSize;x+=tileSize){
+    for(let y=startY;y<camY+H+tileSize;y+=tileSize){
+      const px=x-camX,py=y-camY;
+      ctx.fillStyle=(Math.floor(x/tileSize)+Math.floor(y/tileSize))%2===0?'#0d0d18':'#0f0f1c';
+      ctx.fillRect(px,py,tileSize,tileSize);
+    }
+  }
+  // Тонкая сетка
+  ctx.strokeStyle='rgba(255,255,255,0.025)';
+  ctx.lineWidth=0.5;
+  for(let x=startX;x<camX+W+tileSize;x+=tileSize){
+    ctx.beginPath();ctx.moveTo(x-camX,0);ctx.lineTo(x-camX,H);ctx.stroke();
+  }
+  for(let y=startY;y<camY+H+tileSize;y+=tileSize){
+    ctx.beginPath();ctx.moveTo(0,y-camY);ctx.lineTo(W,y-camY);ctx.stroke();
+  }
+}
+
+function drawCrosshair(){
+  const cx=mouseX,cy=mouseY;
+  ctx.strokeStyle='rgba(255,80,80,0.8)';
+  ctx.lineWidth=1.5;
+  const gap=8,len=12;
+  ctx.beginPath();
+  ctx.moveTo(cx-gap-len,cy);ctx.lineTo(cx-gap,cy);
+  ctx.moveTo(cx+gap,cy);ctx.lineTo(cx+gap+len,cy);
+  ctx.moveTo(cx,cy-gap-len);ctx.lineTo(cx,cy-gap);
+  ctx.moveTo(cx,cy+gap);ctx.lineTo(cx,cy+gap+len);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx,cy,gap,0,Math.PI*2);
+  ctx.stroke();
+}
+
+// ══ HUD обновление ══
+function updateHUD(){
+  if(!player) return;
+  const hp=Math.max(0,player.hp);
+  document.getElementById('hpFill').style.width=(hp/MAX_HP*100)+'%';
+  document.getElementById('hpLabel').textContent=hp;
+
+  // Цвет HP бара
+  const hpEl=document.getElementById('hpFill');
+  if(hp>60) hpEl.style.background='linear-gradient(90deg,#2ecc71,#4af078)';
+  else if(hp>30) hpEl.style.background='linear-gradient(90deg,#f9ca24,#ffdd00)';
+  else hpEl.style.background='linear-gradient(90deg,#e74c3c,#ff6b6b)';
+
+  // Патроны
+  const ammoWrap=document.getElementById('ammoWrap');
+  ammoWrap.innerHTML='';
+  for(let i=0;i<MAX_AMMO;i++){
+    const d=document.createElement('div');
+    d.className='ammo-dot'+(i>=player.ammo?' empty':'');
+    ammoWrap.appendChild(d);
+  }
+
+  // Полоска перезарядки
+  const rb=document.getElementById('reloadBar');
+  const rf=document.getElementById('reloadFill');
+  if(player.reloading){
+    rb.style.opacity='1';
+    const p=Math.min(100,(Date.now()-player.reloadStart)/RELOAD_TIME*100);
+    rf.style.width=p+'%';
+  } else {
+    rb.style.opacity='0';
+  }
+
+  // Табло убийств
+  const sorted=[...tanks].filter(t=>t.kills>0||t.isPlayer).sort((a,b)=>b.kills-a.kills).slice(0,8);
+  if(sorted.length===0) sorted.push(player);
+  document.getElementById('sbList').innerHTML=sorted.map((t,i)=>`
+    <div class="sb-row${t.isPlayer?' me':''}">
+      <span class="sb-rank">${i+1}</span>
+      <div class="tank-dot" style="background:${TANK_COLORS[t.colorIdx].body}"></div>
+      <span class="sb-name">${t.name}</span>
+      <span class="sb-kills">${t.kills}</span>
+    </div>`).join('');
+}
+
+// ══ KILL FEED ══
+function addKillFeed(killer, victim, kc, vc){
+  const feed=document.getElementById('killFeed');
+  const item=document.createElement('div');
+  item.className='kf-item';
+  item.innerHTML=`<span style="color:${kc}">${killer}</span> <span style="color:rgba(255,255,255,0.4)">☠️</span> <span style="color:${vc}">${victim}</span>`;
+  feed.appendChild(item);
+  setTimeout(()=>item.remove(),3000);
+}
+
+function showToast(msg,color){
+  const w=document.getElementById('toastWrap'),tt=document.createElement('div');
+  tt.className='toast';tt.textContent=msg;if(color){tt.style.borderColor=color;tt.style.color=color;}
+  w.appendChild(tt);setTimeout(()=>tt.remove(),2300);
+}
+
+// ══ ГЛАВНЫЙ ЦИКЛ ══
+let lastT=0;
+function loop(ts){
+  const dt=Math.min(ts-lastT,50);lastT=ts;
+  if(!running){requestAnimationFrame(loop);return;}
+
+  // Обновление
+  updatePlayer(dt);
+  for(const bot of tanks) if(!bot.isPlayer) updateBot(bot,dt);
+  updateBullets();
+
+  // Частицы
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy;
+    p.vx*=0.94; p.vy*=0.94;
+    p.vy+=p.type==='smoke'?-0.05:0.05;
+    p.r*=0.98;
+    p.alpha-=p.decay;
+    if(p.alpha<=0) particles.splice(i,1);
+  }
+
+  // Рисование
+  ctx.clearRect(0,0,W,H);
+  drawBackground();
+  MAP_LAYOUT.forEach(w=>drawTile(w.x,w.y));
+  bullets.forEach(drawBullet);
+  particles.forEach(drawParticle);
+  tanks.forEach(drawTank);
+  if(player&&player.alive) drawCrosshair();
+  updateHUD();
+
+  animId=requestAnimationFrame(loop);
+}
+
+// ══ СМЕРТЬ ══
+function showDeath(){
+  running=false;
+  document.getElementById('dsKills').textContent=playerKills;
+  document.getElementById('dsShots').textContent=playerShots;
+  const acc=playerShots>0?Math.round(playerHits/playerShots*100):0;
+  document.getElementById('dsAccuracy').textContent=acc+'%';
+  const survive=Math.round((Date.now()-startTime)/1000);
+  document.getElementById('dsSurvive').textContent=survive+'с';
+  document.getElementById('deathScreen').classList.add('active');
+}
+
+// ══ ЭКРАНЫ ══
+function startGame(){
+  document.getElementById('menuScreen').classList.remove('active');
+  document.getElementById('deathScreen').classList.remove('active');
+  initGame();
+  running=true;
+}
+
+document.getElementById('playBtn').onclick=startGame;
+document.getElementById('restartBtn').onclick=startGame;
+document.getElementById('menuBtn').onclick=()=>{
+  running=false;
+  document.getElementById('deathScreen').classList.remove('active');
+  document.getElementById('menuScreen').classList.add('active');
+};
+
+// ══ ВВОД ══
+canvas.addEventListener('mousemove',e=>{mouseX=e.clientX;mouseY=e.clientY;});
+canvas.addEventListener('mousedown',e=>{if(e.button===0)mouseDown=true;});
+canvas.addEventListener('mouseup',e=>{if(e.button===0)mouseDown=false;});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('keydown',e=>{keys[e.code]=true;keys[e.key]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();});
+window.addEventListener('keyup',e=>{keys[e.code]=false;keys[e.key]=false;});
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
