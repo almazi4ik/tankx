@@ -45,7 +45,16 @@ body{background:#0a0a0f;overflow:hidden;font-family:'Nunito',sans-serif;user-sel
 .logo-tank{font-family:'Fredoka One',cursive;font-size:90px;line-height:1;filter:drop-shadow(0 0 40px #f9ca2488);}
 .logo-tank .lt{color:#f9ca24;}.logo-tank .la{color:#ff9f43;}.logo-tank .ln{color:#ff6b6b;}.logo-tank .lk{color:#ff4e4e;}.logo-tank .lx{color:#a29bfe;}
 .logo-sub{font-family:'Fredoka One',cursive;font-size:16px;color:rgba(255,255,255,0.3);letter-spacing:4px;margin-top:4px;}
-.btn-play-tank{background:linear-gradient(180deg,#f9ca24 0%,#e0a800 50%,#c48f00 100%);border:none;border-radius:60px;color:#1a0a00;font-family:'Fredoka One',cursive;font-size:36px;letter-spacing:3px;padding:18px 70px;cursor:pointer;box-shadow:0 6px 0 #7a5500,0 10px 30px rgba(249,202,36,0.4);transition:transform .1s;margin-top:48px;}
+.nick-wrap{position:relative;margin-top:40px;width:320px;}
+.nick-label{font-family:'Fredoka One',cursive;font-size:13px;color:rgba(249,202,36,0.6);letter-spacing:3px;text-align:center;margin-bottom:8px;}
+.nick-input-box{position:relative;display:flex;align-items:center;}
+.nick-input{width:100%;background:rgba(255,255,255,0.07);border:2px solid rgba(249,202,36,0.35);border-radius:50px;padding:14px 50px 14px 22px;font-family:'Fredoka One',cursive;font-size:22px;color:#fff;outline:none;text-align:center;letter-spacing:2px;transition:border-color .2s,background .2s,box-shadow .2s;}
+.nick-input::placeholder{color:rgba(255,255,255,0.2);}
+.nick-input:focus{border-color:#f9ca24;background:rgba(249,202,36,0.08);box-shadow:0 0 24px rgba(249,202,36,0.2);}
+.nick-tank-icon{position:absolute;right:14px;font-size:22px;pointer-events:none;transition:transform .2s;}
+.nick-input:focus ~ .nick-tank-icon{transform:rotate(-15deg) scale(1.2);}
+.nick-counter{font-family:'Fredoka One',cursive;font-size:11px;color:rgba(255,255,255,0.2);text-align:right;margin-top:4px;padding-right:8px;}
+.btn-play-tank{background:linear-gradient(180deg,#f9ca24 0%,#e0a800 50%,#c48f00 100%);border:none;border-radius:60px;color:#1a0a00;font-family:'Fredoka One',cursive;font-size:36px;letter-spacing:3px;padding:18px 70px;cursor:pointer;box-shadow:0 6px 0 #7a5500,0 10px 30px rgba(249,202,36,0.4);transition:transform .1s;margin-top:16px;}
 .btn-play-tank:hover{transform:translateY(-3px);}
 .btn-play-tank:active{transform:translateY(3px);}
 .controls-hint{margin-top:24px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;}
@@ -77,12 +86,16 @@ body{background:#0a0a0f;overflow:hidden;font-family:'Nunito',sans-serif;user-sel
     <span class="lt">T</span><span class="la">a</span><span class="ln">n</span><span class="lk">k</span><span class="lx">X</span>
   </div>
   <div class="logo-sub">TANK ARENA</div>
-  <button class="btn-play-tank" id="playBtn">ИГРАТЬ</button>
-  <div class="controls-hint">
-    <div class="hint-item"><span class="hint-key">WASD</span> или <span class="hint-key">↑↓←→</span> движение</div>
-    <div class="hint-item"><span class="hint-key">ЛКМ</span> выстрел</div>
-    <div class="hint-item"><span class="hint-key">R</span> перезарядка</div>
+  <div class="nick-wrap">
+    <div class="nick-label">🎖️ ТВОЙ НИК</div>
+    <div class="nick-input-box">
+      <input class="nick-input" id="nickInput" maxlength="16" placeholder="Введи ник..." autocomplete="off" spellcheck="false">
+      <span class="nick-tank-icon">🎯</span>
+    </div>
+    <div class="nick-counter" id="nickCounter">0 / 16</div>
   </div>
+  <button class="btn-play-tank" id="playBtn">ИГРАТЬ</button>
+
 </div>
 
 <!-- HUD -->
@@ -810,6 +823,17 @@ function startGame(){
   initGame();
   running=true;
 }
+
+// Счётчик символов ника
+const nickInput = document.getElementById('nickInput');
+const nickCounter = document.getElementById('nickCounter');
+nickInput.value = localStorage.getItem('tankx_nick') || '';
+nickCounter.textContent = nickInput.value.length + ' / 16';
+nickInput.addEventListener('input', () => {
+  nickCounter.textContent = nickInput.value.length + ' / 16';
+  localStorage.setItem('tankx_nick', nickInput.value);
+});
+nickInput.addEventListener('keydown', e => { if(e.key === 'Enter') startGame(); });
 
 document.getElementById('playBtn').onclick=startGame;
 document.getElementById('restartBtn').onclick=startGame;
